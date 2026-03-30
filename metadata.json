@@ -1,0 +1,7 @@
+{
+  "name": "Remix: 烟草版知天气",
+  "description": "适配手机端的烟草气象专业服务平台，包含预警提醒、数据统计、气候预测及烤烟认证等核心功能。",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
