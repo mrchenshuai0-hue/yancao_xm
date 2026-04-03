@@ -28,7 +28,8 @@ import {
   Star,
   ArrowLeft,
   Calendar,
-  Award
+  Award,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -44,8 +45,10 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   ResponsiveContainer, 
+  ComposedChart,
   Line, 
   Bar, 
+  Scatter,
   XAxis, 
   YAxis, 
   Tooltip as RechartsTooltip, 
@@ -62,7 +65,8 @@ import {
   MOCK_PREDICTIONS,
   MOCK_WARNINGS,
   MOCK_CERTIFICATIONS,
-  SANMING_REGIONS
+  SANMING_REGIONS,
+  MOCK_IRREGULAR_STATS
 } from './constants';
 
 // --- Types ---
@@ -700,10 +704,17 @@ const IndicatorCard: React.FC<{ item: any, selectedRegion: string, startDate: st
 
 // 2. 气象要素统计
 const StatsPage = () => {
-  const [activeTab, setActiveTab] = useState<'analysis' | 'days'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'irregular'>('analysis');
   const [elementTab, setElementTab] = useState<'temp' | 'precip' | 'sunshine'>('temp');
   const [periodTab, setPeriodTab] = useState<'day' | 'tenDay' | 'month' | 'quarter' | 'year'>('day');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Irregular stats view states
+  const [irregularViews, setIrregularViews] = useState({
+    temp: 'table' as 'table' | 'chart',
+    precip: 'table' as 'table' | 'chart',
+    sunshine: 'table' as 'table' | 'chart'
+  });
   
   // Region Selection (County & Town)
   const [selectedCounty, setSelectedCounty] = useState(SANMING_REGIONS[0].county);
@@ -998,21 +1009,22 @@ const StatsPage = () => {
             onClick={() => setActiveTab('analysis')}
             className={`flex-1 px-1 h-12 text-sm font-medium relative transition-colors ${activeTab === 'analysis' ? 'text-tobacco-green' : 'text-text-sub'}`}
           >
-            定期气候值分析
+            定期分析
             {activeTab === 'analysis' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-tobacco-green rounded-full" />}
           </button>
           <button 
-            onClick={() => setActiveTab('days')}
-            className={`flex-1 px-1 h-12 text-sm font-medium relative transition-colors ${activeTab === 'days' ? 'text-tobacco-green' : 'text-text-sub'}`}
+            onClick={() => setActiveTab('irregular')}
+            className={`flex-1 px-1 h-12 text-sm font-medium relative transition-colors ${activeTab === 'irregular' ? 'text-tobacco-green' : 'text-text-sub'}`}
           >
-            不定期气候值分析
-            {activeTab === 'days' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-tobacco-green rounded-full" />}
+            不定期统计
+            {activeTab === 'irregular' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-tobacco-green rounded-full" />}
           </button>
         </div>
       </div>
 
       {/* Filter Bar: Element & Time Picker */}
-      <div className="bg-white px-4 py-3 sticky top-[104px] z-20 border-b border-border-gray/50 flex flex-col gap-3">
+      {activeTab !== 'irregular' && (
+        <div className="bg-white px-4 py-3 sticky top-[104px] z-20 border-b border-border-gray/50 flex flex-col gap-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1 bg-bg-gray p-0.5 rounded-lg shrink-0">
@@ -1095,6 +1107,7 @@ const StatsPage = () => {
           )}
         </div>
       </div>
+    )}
 
       <div className="p-4 space-y-4 relative min-h-[400px]">
         {isLoading && (
@@ -1158,15 +1171,156 @@ const StatsPage = () => {
             />
           </div>
         ) : (
-          <div className="space-y-4">
-            {MOCK_ELEMENT_DAYS[elementTab].map((item) => (
-              <IndicatorCard 
-                key={item.id} 
-                item={item} 
-                selectedRegion={selectedTown !== '全部' ? selectedTown : selectedCounty} 
-                startDate={startDate}
-                endDate={endDate}
-              />
+          <div className="space-y-6">
+            {/* Irregular Statistics Content */}
+            <div className="bg-white rounded-2xl p-4 card-shadow border border-border-gray/50 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-text-main flex items-center gap-2">
+                  <Calendar size={16} className="text-tobacco-green" />
+                  不定期气候值统计 (全市国家站)
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <CustomDatePicker 
+                  label="起始时间"
+                  value={startDate}
+                  onChange={setStartDate}
+                  className="h-10"
+                />
+                <CustomDatePicker 
+                  label="结束时间"
+                  value={endDate}
+                  onChange={setEndDate}
+                  className="h-10"
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  setIsLoading(true);
+                  setTimeout(() => setIsLoading(false), 800);
+                }}
+                className="w-full bg-tobacco-green text-white py-2.5 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-transform"
+              >
+                查询全市数据
+              </button>
+            </div>
+
+            {/* Three Blocks: Temp, Precip, Sunshine */}
+            {(['temp', 'precip', 'sunshine'] as const).map((type) => (
+              <div key={type} className="bg-white rounded-2xl border border-border-gray overflow-hidden card-shadow">
+                <div className="bg-bg-gray/50 px-4 py-3 border-b border-border-gray flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-4 rounded-full ${type === 'temp' ? 'bg-orange-500' : type === 'precip' ? 'bg-blue-500' : 'bg-yellow-500'}`} />
+                    <span className="text-sm font-bold text-text-main">
+                      {type === 'temp' ? '平均气温' : type === 'precip' ? '累积降水' : '日照时数'}
+                    </span>
+                    <span className="text-[10px] text-text-sub">({type === 'temp' ? '℃' : type === 'precip' ? 'mm' : 'h'})</span>
+                  </div>
+                  <div className="flex bg-white p-0.5 rounded-lg border border-border-gray">
+                    <button 
+                      onClick={() => setIrregularViews({...irregularViews, [type]: 'table'})}
+                      className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${irregularViews[type] === 'table' ? 'bg-tobacco-green text-white shadow-sm' : 'text-text-sub'}`}
+                    >
+                      列表
+                    </button>
+                    <button 
+                      onClick={() => setIrregularViews({...irregularViews, [type]: 'chart'})}
+                      className={`px-2 py-1 text-[9px] font-bold rounded-md transition-all ${irregularViews[type] === 'chart' ? 'bg-tobacco-green text-white shadow-sm' : 'text-text-sub'}`}
+                    >
+                      图表
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-0">
+                  {irregularViews[type] === 'table' ? (
+                    <div className="w-full">
+                      <table className="w-full text-left border-collapse table-fixed">
+                        <thead>
+                          <tr className="bg-bg-gray/20 border-b border-border-gray">
+                            <th className="w-12 p-1.5 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">站名</th>
+                            <th className="p-1.5 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">数值</th>
+                            <th className="p-1.5 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">距平</th>
+                            {type === 'precip' && <th className="p-1.5 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">距平率</th>}
+                            <th className="p-1.5 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">常年</th>
+                            <th className="p-1.5 text-[9px] font-bold text-text-sub text-center">去年</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-gray">
+                          {MOCK_IRREGULAR_STATS.map((row) => (
+                            <tr key={row.id} className="hover:bg-bg-gray/10">
+                              <td className="p-1.5 text-[9px] font-medium text-text-main border-r border-border-gray text-center truncate">{row.stationName}</td>
+                              <td className="p-1.5 text-[9px] font-bold text-weather-blue border-r border-border-gray text-center">{row[type]}</td>
+                              <td className={`p-1.5 text-[9px] border-r border-border-gray text-center ${row[`${type}Anomaly`] > 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                {row[`${type}Anomaly`] > 0 ? '+' : ''}{row[`${type}Anomaly`]}
+                              </td>
+                              {type === 'precip' && <td className="p-1.5 text-[9px] text-text-sub border-r border-border-gray text-center">{row.precipAnomalyRate}%</td>}
+                              <td className="p-1.5 text-[9px] text-text-sub border-r border-border-gray text-center">{row[`${type}Climate`]}</td>
+                              <td className="p-1.5 text-[9px] text-text-sub text-center">{row[`${type}LastYear`]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="p-4">
+                      <h4 className="text-[10px] font-bold text-text-main mb-4 text-center">
+                        各县级站{type === 'temp' ? '平均气温' : type === 'precip' ? '累积降水' : '日照时数'}对比
+                      </h4>
+                      <div className="bg-bg-gray/20 rounded-xl p-3 mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] font-bold text-text-main">图表说明</span>
+                          <span className="text-[8px] text-text-sub italic">对比常年与去年同期值</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-2 rounded-sm bg-[#1E88E5]" />
+                            <span className="text-[8px] text-text-sub">当前值</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-0.5 bg-[#9E9E9E]" />
+                            <span className="text-[8px] text-text-sub">常年值</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#FFB74D]" />
+                            <span className="text-[8px] text-text-sub">去年同期</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="h-[450px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart 
+                            layout="vertical"
+                            data={MOCK_IRREGULAR_STATS.map(s => ({
+                              name: s.stationName.replace('站', ''),
+                              current: s[type],
+                              climate: s[`${type}Climate`],
+                              lastYear: s[`${type}LastYear`]
+                            }))}
+                            margin={{ top: 10, right: 30, left: 0, bottom: 10 }}
+                          >
+                            <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 8 }} unit={type === 'temp' ? '℃' : type === 'precip' ? 'mm' : 'h'} />
+                            <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 'bold' }} width={40} />
+                            <RechartsTooltip 
+                              contentStyle={{ fontSize: '10px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} 
+                              formatter={(value: any, name: string) => [value, name === 'current' ? '当前值' : name === 'climate' ? '常年值' : '去年同期']}
+                            />
+                            <Bar dataKey="current" fill="#1E88E5" radius={[0, 4, 4, 0]} barSize={14}>
+                              <LabelList dataKey="current" position="right" style={{ fontSize: '8px', fill: '#1E88E5', fontWeight: 'bold' }} offset={5} />
+                            </Bar>
+                            <Scatter dataKey="climate" shape={(props: any) => {
+                              const { cx, cy } = props;
+                              return <line x1={cx} y1={cy - 10} x2={cx} y2={cy + 10} stroke="#9E9E9E" strokeWidth={2} />;
+                            }} />
+                            <Scatter dataKey="lastYear" fill="#FFB74D" shape="circle" />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -1180,15 +1334,25 @@ const ModificationPage = () => {
   const [startDate, setStartDate] = useState('2026-01-01');
   const [endDate, setEndDate] = useState('2026-03-25');
   const [activeView, setActiveView] = useState<'table' | 'chart'>('table');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const stats = MOCK_MODIFICATION_STATS;
   
+  const filteredStats = useMemo(() => {
+    return stats.filter(s => s.county.includes(searchTerm));
+  }, [stats, searchTerm]);
+
   const totals = useMemo(() => {
     return stats.reduce((acc, curr) => ({
       opTotal: acc.opTotal + curr.opTotal,
       ammoTotal: acc.ammoTotal + curr.ammoTotal,
-      smoke: acc.smoke + curr.smoke
-    }), { opTotal: 0, ammoTotal: 0, smoke: 0 });
+      smoke: acc.smoke + curr.smoke,
+      sites: acc.sites + (curr.sites || 0),
+      opRain: acc.opRain + (curr.opRain || 0),
+      opHail: acc.opHail + (curr.opHail || 0),
+      rockets: acc.rockets + (curr.rockets || 0),
+      flames: acc.flames + (curr.flames || 0)
+    }), { opTotal: 0, ammoTotal: 0, smoke: 0, sites: 0, opRain: 0, opHail: 0, rockets: 0, flames: 0 });
   }, [stats]);
 
   const chartData = useMemo(() => {
@@ -1224,21 +1388,69 @@ const ModificationPage = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 text-center">
-            <div className="text-[9px] text-text-sub mb-1 font-bold">作业总次数</div>
-            <div className="text-lg font-black text-weather-blue">{totals.opTotal}</div>
-            <div className="text-[8px] text-text-sub mt-0.5">单位: 次</div>
+        <div className="flex justify-between items-center px-1">
+          <span className="text-[10px] text-text-sub font-medium">数据更新至: 2026-03-25 18:00</span>
+          <div className="flex items-center gap-1 text-[10px] text-tobacco-green font-bold">
+            <div className="w-1.5 h-1.5 rounded-full bg-tobacco-green animate-pulse" />
+            实时同步中
           </div>
-          <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100 text-center">
-            <div className="text-[9px] text-text-sub mb-1 font-bold">总用弹量</div>
-            <div className="text-lg font-black text-orange-600">{totals.ammoTotal}</div>
-            <div className="text-[8px] text-text-sub mt-0.5">单位: 枚</div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-weather-blue">
+              <MapPin size={20} />
+            </div>
+            <div>
+              <div className="text-[10px] text-text-sub font-bold">作业点总数</div>
+              <div className="text-lg font-black text-weather-blue">{totals.sites} <span className="text-[10px] font-normal">个</span></div>
+            </div>
           </div>
-          <div className="bg-green-50 p-3 rounded-2xl border border-green-100 text-center">
-            <div className="text-[9px] text-text-sub mb-1 font-bold">烟条总量</div>
-            <div className="text-lg font-black text-tobacco-green">{totals.smoke}</div>
-            <div className="text-[8px] text-text-sub mt-0.5">单位: 根</div>
+          <div className="bg-indigo-50 p-3 rounded-2xl border border-indigo-100 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+              <Zap size={20} />
+            </div>
+            <div>
+              <div className="text-[10px] text-text-sub font-bold">作业总次数</div>
+              <div className="text-lg font-black text-indigo-600">{totals.opTotal} <span className="text-[10px] font-normal">次</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-text-sub font-bold">作业类型分布</span>
+              <span className="text-[8px] px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full">次</span>
+            </div>
+            <div className="flex justify-between items-end">
+              <div className="text-center flex-1">
+                <div className="text-xs font-bold text-orange-700">{totals.opRain}</div>
+                <div className="text-[8px] text-text-sub">增雨</div>
+              </div>
+              <div className="w-px h-6 bg-orange-200" />
+              <div className="text-center flex-1">
+                <div className="text-xs font-bold text-orange-700">{totals.opHail}</div>
+                <div className="text-[8px] text-text-sub">防雹</div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-green-50 p-3 rounded-2xl border border-green-100 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-text-sub font-bold">作业量统计</span>
+              <span className="text-[8px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full">枚/条</span>
+            </div>
+            <div className="flex justify-between items-end">
+              <div className="text-center flex-1">
+                <div className="text-xs font-bold text-green-700">{totals.rockets}</div>
+                <div className="text-[8px] text-text-sub">火箭弹</div>
+              </div>
+              <div className="w-px h-6 bg-green-200" />
+              <div className="text-center flex-1">
+                <div className="text-xs font-bold text-green-700">{totals.flames}</div>
+                <div className="text-[8px] text-text-sub">焰条</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1259,77 +1471,134 @@ const ModificationPage = () => {
         </div>
 
         {activeView === 'table' ? (
-          <div className="bg-white rounded-2xl border border-border-gray overflow-hidden card-shadow">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[600px]">
-                <thead>
-                  <tr className="bg-bg-gray/50 border-b border-border-gray">
-                    <th rowSpan={2} className="p-2 text-[10px] font-bold text-text-sub border-r border-border-gray text-center">市县</th>
-                    <th colSpan={4} className="p-2 text-[10px] font-bold text-text-sub border-b border-r border-border-gray text-center">作业次数(次)</th>
-                    <th colSpan={4} className="p-2 text-[10px] font-bold text-text-sub border-b border-r border-border-gray text-center">用弹量(枚)</th>
-                    <th rowSpan={2} className="p-2 text-[10px] font-bold text-text-sub text-center">烟条(根)</th>
-                  </tr>
-                  <tr className="bg-bg-gray/30 border-b border-border-gray">
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">总计</th>
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">增雨</th>
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">防雹</th>
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">其它</th>
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">总计</th>
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">增雨</th>
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">防雹</th>
-                    <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">其它</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-gray">
-                  {stats.map((row, i) => (
-                    <tr key={i} className="hover:bg-bg-gray/20">
-                      <td className="p-2 text-[10px] font-medium text-text-main border-r border-border-gray text-center">{row.county}</td>
-                      <td className="p-2 text-[10px] font-bold text-text-main border-r border-border-gray text-center">{row.opTotal}</td>
-                      <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.opRain}</td>
-                      <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.opHail || ''}</td>
-                      <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.opOther || ''}</td>
-                      <td className="p-2 text-[10px] font-bold text-text-main border-r border-border-gray text-center">{row.ammoTotal}</td>
-                      <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.ammoRain}</td>
-                      <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.ammoHail || ''}</td>
-                      <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.ammoOther || ''}</td>
-                      <td className="p-2 text-[10px] font-bold text-tobacco-green text-center">{row.smoke}</td>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sub" />
+              <input 
+                type="text"
+                placeholder="搜索县区..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-9 pl-9 pr-4 bg-white border border-border-gray rounded-xl text-xs focus:outline-none focus:border-tobacco-green transition-colors"
+              />
+            </div>
+            <div className="bg-white rounded-2xl border border-border-gray overflow-hidden card-shadow">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead>
+                    <tr className="bg-bg-gray/50 border-b border-border-gray">
+                      <th rowSpan={2} className="p-2 text-[10px] font-bold text-text-sub border-r border-border-gray text-center">市县</th>
+                      <th rowSpan={2} className="p-2 text-[10px] font-bold text-text-sub border-r border-border-gray text-center">作业点</th>
+                      <th colSpan={3} className="p-2 text-[10px] font-bold text-text-sub border-b border-r border-border-gray text-center">作业次数(次)</th>
+                      <th colSpan={3} className="p-2 text-[10px] font-bold text-text-sub border-b border-r border-border-gray text-center">作业量(枚/条)</th>
+                      <th rowSpan={2} className="p-2 text-[10px] font-bold text-text-sub text-center">烟条(根)</th>
                     </tr>
-                  ))}
-                  <tr className="bg-bg-gray/50 font-bold">
-                    <td className="p-2 text-[10px] text-text-main border-r border-border-gray text-center">合计</td>
-                    <td colSpan={4} className="p-2 text-[10px] text-weather-blue border-r border-border-gray text-center">{totals.opTotal}</td>
-                    <td colSpan={4} className="p-2 text-[10px] text-orange-600 border-r border-border-gray text-center">{totals.ammoTotal}</td>
-                    <td className="p-2 text-[10px] text-tobacco-green text-center">{totals.smoke}</td>
-                  </tr>
-                </tbody>
-              </table>
+                    <tr className="bg-bg-gray/30 border-b border-border-gray">
+                      <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">总计</th>
+                      <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">增雨</th>
+                      <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">防雹</th>
+                      <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">总计</th>
+                      <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">火箭弹</th>
+                      <th className="p-1 text-[9px] font-bold text-text-sub border-r border-border-gray text-center">焰条</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-gray">
+                    {filteredStats.map((row, i) => (
+                      <tr key={i} className="hover:bg-bg-gray/20">
+                        <td className="p-2 text-[10px] font-medium text-text-main border-r border-border-gray text-center">{row.county}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.sites}</td>
+                        <td className="p-2 text-[10px] font-bold text-text-main border-r border-border-gray text-center">{row.opTotal}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.opRain}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.opHail || ''}</td>
+                        <td className="p-2 text-[10px] font-bold text-text-main border-r border-border-gray text-center">{row.ammoTotal}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.rockets}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{row.flames}</td>
+                        <td className="p-2 text-[10px] font-bold text-tobacco-green text-center">{row.smoke}</td>
+                      </tr>
+                    ))}
+                    {!searchTerm && (
+                      <tr className="bg-bg-gray/50 font-bold">
+                        <td className="p-2 text-[10px] text-text-main border-r border-border-gray text-center">合计</td>
+                        <td className="p-2 text-[10px] text-text-main border-r border-border-gray text-center">{totals.sites}</td>
+                        <td className="p-2 text-[10px] text-weather-blue border-r border-border-gray text-center">{totals.opTotal}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{totals.opRain}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{totals.opHail}</td>
+                        <td className="p-2 text-[10px] text-orange-600 border-r border-border-gray text-center">{totals.ammoTotal}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{totals.rockets}</td>
+                        <td className="p-2 text-[10px] text-text-sub border-r border-border-gray text-center">{totals.flames}</td>
+                        <td className="p-2 text-[10px] text-tobacco-green text-center">{totals.smoke}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl p-4 border border-border-gray card-shadow space-y-6">
-            <div className="h-[240px] w-full">
-              <h4 className="text-[10px] font-bold text-text-sub mb-2">各地区作业量对比</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <ChartBar data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
-                  <RechartsTooltip contentStyle={{ fontSize: '10px', borderRadius: '8px' }} />
-                  <Bar dataKey="作业次数" fill="#1E88E5" radius={[4, 4, 0, 0]} barSize={12} />
-                  <Bar dataKey="用弹量" fill="#FB8C00" radius={[4, 4, 0, 0]} barSize={12} />
-                </ChartBar>
-              </ResponsiveContainer>
+          <div className="bg-white rounded-2xl p-4 border border-border-gray card-shadow space-y-8">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-3 bg-blue-500 rounded-full" />
+                <h3 className="text-xs font-bold text-text-main">各县区作业次数与用弹量对比</h3>
+              </div>
+              <div className="h-[450px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ChartBar 
+                    layout="vertical"
+                    data={chartData} 
+                    margin={{ top: 10, right: 40, left: 0, bottom: 10 }}
+                  >
+                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 'bold' }} width={40} />
+                    <RechartsTooltip contentStyle={{ fontSize: '10px', borderRadius: '8px' }} />
+                    <Bar dataKey="作业次数" fill="#1E88E5" radius={[0, 4, 4, 0]} barSize={10}>
+                      <LabelList dataKey="作业次数" position="right" style={{ fontSize: '8px', fill: '#1E88E5', fontWeight: 'bold' }} offset={5} />
+                    </Bar>
+                    <Bar dataKey="用弹量" fill="#FB8C00" radius={[0, 4, 4, 0]} barSize={10}>
+                      <LabelList dataKey="用弹量" position="right" style={{ fontSize: '8px', fill: '#FB8C00', fontWeight: 'bold' }} offset={5} />
+                    </Bar>
+                  </ChartBar>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center gap-4 mt-2">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-[#1E88E5]" />
+                  <span className="text-[8px] text-text-sub">作业次数 (次)</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-[#FB8C00]" />
+                  <span className="text-[8px] text-text-sub">用弹量 (枚)</span>
+                </div>
+              </div>
             </div>
             
-            <div className="h-[240px] w-full">
-              <h4 className="text-[10px] font-bold text-text-sub mb-2">烟条发放分布</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <ChartArea data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
-                  <RechartsTooltip contentStyle={{ fontSize: '10px', borderRadius: '8px' }} />
-                  <Area type="monotone" dataKey="烟条" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.1} />
-                </ChartArea>
-              </ResponsiveContainer>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-3 bg-green-500 rounded-full" />
+                <h3 className="text-xs font-bold text-text-main">各县区烟条发放分布</h3>
+              </div>
+              <div className="h-[450px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ChartArea 
+                    layout="vertical"
+                    data={chartData} 
+                    margin={{ top: 10, right: 40, left: 0, bottom: 10 }}
+                  >
+                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 'bold' }} width={40} />
+                    <RechartsTooltip contentStyle={{ fontSize: '10px', borderRadius: '8px' }} />
+                    <Area type="monotone" dataKey="烟条" stroke="#4CAF50" fill="#4CAF50" fillOpacity={0.1}>
+                      <LabelList dataKey="烟条" position="right" style={{ fontSize: '8px', fill: '#4CAF50', fontWeight: 'bold' }} offset={5} />
+                    </Area>
+                  </ChartArea>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center mt-2">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-[#4CAF50]" />
+                  <span className="text-[8px] text-text-sub">烟条发放 (根)</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1342,6 +1611,7 @@ const ModificationPage = () => {
 const PredictPage = () => {
   const [activeCategory, setActiveCategory] = useState<string>('season');
   const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [detailView, setDetailView] = useState<'table' | 'chart'>('table');
   const [filters, setFilters] = useState({
     year: '2026年',
     month: '全部',
@@ -1405,44 +1675,108 @@ const PredictPage = () => {
                   <div className="w-1 h-3 bg-weather-blue mr-2 rounded-full" />
                   附表 三明市2026年春季各县（市、区）气温、降水预测表
                 </h3>
-                <span className="text-[9px] text-text-sub">更新时间: 2026-03-25 03:54</span>
-              </div>
-              <div className="border border-border-gray rounded-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[10px] text-left border-collapse min-w-[400px]">
-                    <thead>
-                      <tr className="bg-bg-gray text-text-sub font-medium border-b border-border-gray">
-                        <th className="p-2 border-r border-border-gray" rowSpan={2}>地市</th>
-                        <th className="p-2 border-r border-border-gray" rowSpan={2}>县区</th>
-                        <th className="p-2 text-center border-b border-r border-border-gray" colSpan={3}>气温（单位：℃）</th>
-                        <th className="p-2 text-center border-b border-border-gray" colSpan={3}>降水（单位：毫米）</th>
-                      </tr>
-                      <tr className="bg-bg-gray text-text-sub font-medium border-b border-border-gray">
-                        <th className="p-1 text-center border-r border-border-gray">预测值</th>
-                        <th className="p-1 text-center border-r border-border-gray">常年值</th>
-                        <th className="p-1 text-center border-r border-border-gray">距平</th>
-                        <th className="p-1 text-center border-r border-border-gray">预测值</th>
-                        <th className="p-1 text-center border-r border-border-gray">常年值</th>
-                        <th className="p-1 text-center">距平</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border-gray">
-                      {selectedReport.table.map((row: any, i: number) => (
-                        <tr key={i} className="bg-white">
-                          {i === 0 && <td className="p-2 border-r border-border-gray font-medium text-center" rowSpan={selectedReport.table.length}>三明</td>}
-                          <td className="p-2 border-r border-border-gray font-medium">{row.county}</td>
-                          <td className="p-1 text-center border-r border-border-gray">{row.temp}</td>
-                          <td className="p-1 text-center border-r border-border-gray">{row.tempNormal}</td>
-                          <td className="p-1 text-center border-r border-border-gray text-orange-600">{row.tempDiff}</td>
-                          <td className="p-1 text-center border-r border-border-gray">{row.rain}</td>
-                          <td className="p-1 text-center border-r border-border-gray">{row.rainNormal}</td>
-                          <td className="p-1 text-center text-blue-600">{row.rainDiff}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="flex bg-bg-gray p-0.5 rounded-lg border border-border-gray">
+                  <button 
+                    onClick={() => setDetailView('table')}
+                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-all ${detailView === 'table' ? 'bg-weather-blue text-white shadow-sm' : 'text-text-sub'}`}
+                  >
+                    列表
+                  </button>
+                  <button 
+                    onClick={() => setDetailView('chart')}
+                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-all ${detailView === 'chart' ? 'bg-weather-blue text-white shadow-sm' : 'text-text-sub'}`}
+                  >
+                    图表
+                  </button>
                 </div>
               </div>
+              
+              {detailView === 'table' ? (
+                <div className="border border-border-gray rounded-lg overflow-hidden">
+                  <div className="w-full">
+                    <table className="w-full text-[9px] text-left border-collapse table-fixed">
+                      <thead>
+                        <tr className="bg-bg-gray text-text-sub font-medium border-b border-border-gray">
+                          <th className="w-8 p-1.5 border-r border-border-gray" rowSpan={2}>地市</th>
+                          <th className="w-12 p-1.5 border-r border-border-gray" rowSpan={2}>县区</th>
+                          <th className="p-1.5 text-center border-b border-r border-border-gray" colSpan={3}>气温（℃）</th>
+                          <th className="p-1.5 text-center border-b border-border-gray" colSpan={3}>降水（mm）</th>
+                        </tr>
+                        <tr className="bg-bg-gray text-text-sub font-medium border-b border-border-gray">
+                          <th className="p-1 text-center border-r border-border-gray">预测</th>
+                          <th className="p-1 text-center border-r border-border-gray">常年</th>
+                          <th className="p-1 text-center border-r border-border-gray">距平</th>
+                          <th className="p-1 text-center border-r border-border-gray">预测</th>
+                          <th className="p-1 text-center border-r border-border-gray">常年</th>
+                          <th className="p-1 text-center">距平</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-gray">
+                        {selectedReport.table.map((row: any, i: number) => (
+                          <tr key={i} className="bg-white">
+                            {i === 0 && <td className="p-1.5 border-r border-border-gray font-medium text-center" rowSpan={selectedReport.table.length}>三明</td>}
+                            <td className="p-1.5 border-r border-border-gray font-medium truncate">{row.county}</td>
+                            <td className="p-1 text-center border-r border-border-gray">{row.temp}</td>
+                            <td className="p-1 text-center border-r border-border-gray">{row.tempNormal}</td>
+                            <td className="p-1 text-center border-r border-border-gray text-orange-600">{row.tempDiff}</td>
+                            <td className="p-1 text-center border-r border-border-gray">{row.rain}</td>
+                            <td className="p-1 text-center border-r border-border-gray">{row.rainNormal}</td>
+                            <td className="p-1 text-center text-blue-600">{row.rainDiff}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="bg-white p-3 rounded-xl border border-border-gray/50">
+                    <h4 className="text-[10px] font-bold text-text-main mb-4 text-center">各县区气温预测对比 (℃)</h4>
+                    <div className="h-[400px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ChartBar 
+                          layout="vertical"
+                          data={selectedReport.table} 
+                          margin={{ top: 10, right: 40, left: 0, bottom: 10 }}
+                        >
+                          <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
+                          <YAxis dataKey="county" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 'bold' }} width={40} />
+                          <RechartsTooltip contentStyle={{ fontSize: '10px', borderRadius: '8px' }} />
+                          <Bar dataKey="temp" name="预测气温" fill="#FB8C00" radius={[0, 4, 4, 0]} barSize={10}>
+                            <LabelList dataKey="temp" position="right" style={{ fontSize: '8px', fill: '#FB8C00', fontWeight: 'bold' }} offset={5} />
+                          </Bar>
+                          <Bar dataKey="tempNormal" name="常年气温" fill="#9E9E9E" radius={[0, 4, 4, 0]} barSize={10}>
+                            <LabelList dataKey="tempNormal" position="right" style={{ fontSize: '8px', fill: '#9E9E9E' }} offset={5} />
+                          </Bar>
+                        </ChartBar>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-xl border border-border-gray/50">
+                    <h4 className="text-[10px] font-bold text-text-main mb-4 text-center">各县区降水预测对比 (mm)</h4>
+                    <div className="h-[400px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ChartBar 
+                          layout="vertical"
+                          data={selectedReport.table} 
+                          margin={{ top: 10, right: 40, left: 0, bottom: 10 }}
+                        >
+                          <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 9 }} />
+                          <YAxis dataKey="county" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 'bold' }} width={40} />
+                          <RechartsTooltip contentStyle={{ fontSize: '10px', borderRadius: '8px' }} />
+                          <Bar dataKey="rain" name="预测降水" fill="#1E88E5" radius={[0, 4, 4, 0]} barSize={10}>
+                            <LabelList dataKey="rain" position="right" style={{ fontSize: '8px', fill: '#1E88E5', fontWeight: 'bold' }} offset={5} />
+                          </Bar>
+                          <Bar dataKey="rainNormal" name="常年降水" fill="#9E9E9E" radius={[0, 4, 4, 0]} barSize={10}>
+                            <LabelList dataKey="rainNormal" position="right" style={{ fontSize: '8px', fill: '#9E9E9E' }} offset={5} />
+                          </Bar>
+                        </ChartBar>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="text-[9px] text-text-sub mt-2 leading-relaxed">
                 注：略高：平均气温偏高0.1～1.0℃；偏少：降水距平百分率为-50～-20%。
               </div>
@@ -1543,8 +1877,8 @@ const PredictPage = () => {
 // 5. 气象预警产品
 const WarningPage = () => {
   const [activeCategory, setActiveCategory] = useState<string>('regular');
-  const [showPopup, setShowPopup] = useState(false);
   const [region, setRegion] = useState({ county: '宁化县', town: '全部' });
+  const [selectedWarning, setSelectedWarning] = useState<any>(null);
 
   const categories = [
     { id: 'regular', label: '常规预警' },
@@ -1552,11 +1886,6 @@ const WarningPage = () => {
     { id: 'shortTerm', label: '短时强天气' },
     { id: 'direct', label: '短临直通信息' },
   ];
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowPopup(true), 500);
-    return () => clearTimeout(timer);
-  }, []);
 
   const filteredWarnings = useMemo(() => {
     return MOCK_WARNINGS.filter(w => {
@@ -1567,11 +1896,75 @@ const WarningPage = () => {
     });
   }, [activeCategory, region]);
 
+  // Marquee warnings (all warnings for the current region regardless of category)
+  const marqueeWarnings = useMemo(() => {
+    return MOCK_WARNINGS.filter(w => {
+      const matchesCounty = region.county === '全部' || w.county === region.county || w.county === '全部';
+      return matchesCounty;
+    });
+  }, [region.county]);
+
+  if (selectedWarning) {
+    return (
+      <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="pb-20 bg-white min-h-screen">
+        <Header title="预警详情" onBack={() => setSelectedWarning(null)} />
+        <div className="p-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${
+              selectedWarning.level === '橙色' ? 'bg-orange-500' : 
+              selectedWarning.level === '黄色' ? 'bg-yellow-500' :
+              selectedWarning.level === '蓝色' ? 'bg-blue-500' :
+              selectedWarning.level === '重要' ? 'bg-red-600' :
+              'bg-tobacco-green'
+            }`}>
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-text-main">{selectedWarning.type}预警</h2>
+              <div className="text-[10px] text-text-sub">{selectedWarning.time} | {selectedWarning.area}</div>
+            </div>
+          </div>
+
+          <div className="bg-bg-gray p-4 rounded-2xl border border-border-gray/50 mb-6">
+            <h3 className="text-sm font-bold mb-2 text-text-main">预警内容</h3>
+            <p className="text-xs text-text-main leading-relaxed">{selectedWarning.content}</p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-20">
       <Header title="气象预警产品" />
       
-      <div className="bg-white border-b border-border-gray sticky top-14 z-30">
+      {/* Warning Marquee */}
+      {marqueeWarnings.length > 0 && (
+        <div className="bg-red-50 text-red-700 h-10 flex items-center overflow-hidden sticky top-14 z-40 border-y border-red-100">
+          <div className="flex-shrink-0 px-3 bg-red-600 text-white h-full flex items-center z-10 shadow-lg">
+            <Bell size={14} className="animate-bounce" />
+            <span className="text-[10px] font-bold ml-1 whitespace-nowrap">预警播报</span>
+          </div>
+          <div className="flex-1 relative overflow-hidden h-full">
+            <div className="absolute whitespace-nowrap animate-marquee flex items-center h-full">
+              {marqueeWarnings.map((w, i) => (
+                <button 
+                  key={w.id} 
+                  onClick={() => setSelectedWarning(w)}
+                  className="inline-flex items-center px-4 hover:underline"
+                >
+                  <span className="text-[10px] font-medium">
+                    【{w.level}】{w.area}{w.type}预警：{w.content.substring(0, 30)}...
+                  </span>
+                  {i < marqueeWarnings.length - 1 && <span className="mx-4 opacity-30">|</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white border-b border-border-gray sticky top-24 z-30">
         <div className="flex justify-between px-2">
           {categories.map(cat => (
             <button 
@@ -1593,20 +1986,14 @@ const WarningPage = () => {
       />
 
       <div className="p-4 space-y-4">
-        {activeCategory === 'important' && filteredWarnings.length > 0 && (
-          <div className="bg-red-50 border border-red-100 p-4 rounded-2xl mb-4 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-red-600" />
-            <div className="text-xs font-bold text-red-600 mb-1 flex items-center">
-              <AlertTriangle size={16} className="mr-1.5" /> 最新重要天气预警
-            </div>
-            <p className="text-xs text-red-800 leading-relaxed font-medium">{filteredWarnings[0].content}</p>
-          </div>
-        )}
-
         <div className="space-y-3">
           {filteredWarnings.length > 0 ? (
             filteredWarnings.map(warning => (
-              <div key={warning.id} className="bg-white rounded-2xl p-4 card-shadow border border-border-gray/50 btn-active">
+              <div 
+                key={warning.id} 
+                onClick={() => setSelectedWarning(warning)}
+                className="bg-white rounded-2xl p-4 card-shadow border border-border-gray/50 btn-active"
+              >
                 <div className="flex justify-between items-start mb-2">
                   <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold text-white ${
                     warning.level === '橙色' ? 'bg-orange-500' : 
@@ -1622,11 +2009,6 @@ const WarningPage = () => {
                 </div>
                 <div className="text-sm font-bold text-text-main mb-1">{warning.area}</div>
                 <p className="text-xs text-text-sub leading-relaxed line-clamp-2">{warning.content}</p>
-                {warning.advice && (
-                  <div className="mt-3 p-3 bg-bg-gray rounded-xl text-[10px] text-text-main border border-border-gray/30">
-                    <span className="font-bold text-tobacco-green">防御指南：</span>{warning.advice}
-                  </div>
-                )}
               </div>
             ))
           ) : (
@@ -1639,31 +2021,6 @@ const WarningPage = () => {
           )}
         </div>
       </div>
-
-      <AnimatePresence>
-        {showPopup && (
-          <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white rounded-xl w-full max-w-[320px] overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex items-center text-orange-500 mb-4">
-                  <AlertTriangle size={24} className="mr-2" />
-                  <h3 className="text-lg font-bold">【暴雨橙色预警】</h3>
-                </div>
-                <p className="text-sm text-text-main leading-relaxed">预计未来3小时内宁化县部分乡镇降雨量将达50毫米以上。请注意防范强降水可能引发的次生灾害。</p>
-              </div>
-              <div className="flex border-t border-border-gray">
-                <button onClick={() => setShowPopup(false)} className="flex-1 h-12 text-sm text-text-sub font-medium border-r border-border-gray btn-active">忽略</button>
-                <button onClick={() => setShowPopup(false)} className="flex-1 h-12 text-sm text-white bg-weather-blue font-bold btn-active">确认</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 };

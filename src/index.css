@@ -74,3 +74,19 @@
 .btn-active:active {
   @apply brightness-90 transition-all duration-200;
 }
+
+/* Marquee Animation */
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.animate-marquee {
+  animation: marquee 60s linear infinite;
+  animation-delay: -30s;
+}
+
+.animate-marquee:hover,
+.animate-marquee:active {
+  animation-play-state: paused;
+}
